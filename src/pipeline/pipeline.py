@@ -5,9 +5,30 @@ from logger import start_run, finish_run
 from state_manager import update_watermark
 from storage import upload_file
 from load_warehouse import main as load_warehouse_main
+from lock_manager import acquire_lock, release_lock
 
 
 def main():
+
+    if not acquire_lock():
+
+        print()
+        print("=" * 60)
+        print("HEALTHFLOW DATA PIPELINE")
+        print("=" * 60)
+        print()
+        print("PIPELINE ALREADY RUNNING")
+        print(
+            "Another pipeline execution is currently active."
+        )
+        print(
+            "This run will stop to prevent "
+            "overlapping executions."
+        )
+        print()
+        print("=" * 60)
+
+        return
 
     run_info = start_run()
 
@@ -30,6 +51,7 @@ def main():
             pending_watermarks,
             extracted_files,
         ) = extract_main()
+
         print()
         print("UPLOADING RAW FILES TO DATA LAKE")
         print("-" * 60)
@@ -52,7 +74,6 @@ def main():
             rejected_tables,
         ) = validate_main()
 
-
         # =================================================
         # STEP 3: TRANSFORM
         # =================================================
@@ -62,14 +83,19 @@ def main():
         print("-" * 60)
 
         records_transformed = transform_main()
-        
+
+        # =================================================
+        # STEP 4: LOAD WAREHOUSE
+        # =================================================
+
         print()
         print("STEP 4: LOAD WAREHOUSE")
         print("-" * 60)
+
         load_warehouse_main()
 
         # =================================================
-        # STEP 4: UPDATE WATERMARKS
+        # STEP 5: UPDATE WATERMARKS
         # =================================================
 
         print()
@@ -98,7 +124,6 @@ def main():
                 f"{table_name}: {watermark}"
             )
 
-
         # =================================================
         # FINISH SUCCESSFULLY
         # =================================================
@@ -116,7 +141,6 @@ def main():
         print("=" * 60)
         print("PIPELINE COMPLETED SUCCESSFULLY")
         print("=" * 60)
-
 
     except Exception as error:
 
@@ -136,6 +160,10 @@ def main():
         )
 
         raise
+
+    finally:
+
+        release_lock()
 
 
 if __name__ == "__main__":
